@@ -228,10 +228,12 @@ const SchedulesListPage = () => {
   const fetchTrainData = () => {
     // Fetch data for all sensors when the component mounts
     Promise.all([
-      Sensor1GetRequestFromTagIO(),
-      Sensor2GetRequestFromTagIO(),
-      Sensor3GetRequestFromTagIO(),
-      Sensor4GetRequestFromTagIO(),
+        PWXSensor1GetRequestFromTagIO(),
+      PWXSensor2GetRequestFromTagIO(),
+      // Sensor1GetRequestFromTagIO(),
+      // Sensor2GetRequestFromTagIO(),
+      // Sensor3GetRequestFromTagIO(),
+      // Sensor4GetRequestFromTagIO(),
       // Call other sensor functions here
     ])
       .then((responses) => {
@@ -251,7 +253,93 @@ const SchedulesListPage = () => {
         console.error(error);
       });
   };
+const PWXSensor1GetRequestFromTagIO = () => {
+    const url = "https://api.tago.io/data?variable=location&variable=speed";
+    const deviceToken = "6037a6da-0cc8-46bd-8296-f75dc7c17428"; // Replace with your actual device token
 
+    const headers = new Headers({
+      Authorization: deviceToken,
+    });
+
+    const requestOptions = {
+      method: "GET",
+      headers: headers,
+    };
+
+    return fetch(url, requestOptions)
+      .then((response) => response.json())
+      .then((json) => {
+        const locationData = json.result.find(
+          (item) => item.variable === "location"
+        );
+        if (locationData && locationData.value) {
+          const coordinates = locationData.value
+            .split(",")
+            .map((coord) => parseFloat(coord.trim()));
+          const [latitude, longitude] = coordinates;
+
+          const speedData = json.result.find(
+            (item) => item.variable === "speed"
+          );
+          const speed = speedData
+            ? speedData.value
+            : "Train 1 is currently not moving.";
+
+          console.log("Latitude of Node 1:", latitude);
+          console.log("Longitude of Node 1:", longitude);
+          console.log("Speed of Node 1:", speed);
+          return { latitude, longitude, speed };
+        }
+        return null;
+      })
+      .catch((error) => {
+        console.error("Node 1 has a " + error);
+      });
+  };
+
+  const PWXSensor2GetRequestFromTagIO = () => {
+    const url = "https://api.tago.io/data?variable=location&variable=speed";
+    const deviceToken = "09824749-dc75-40c5-9a95-5df1bc4d1ce2"; // Replace with your actual device token
+
+    const headers = new Headers({
+      Authorization: deviceToken,
+    });
+
+    const requestOptions = {
+      method: "GET",
+      headers: headers,
+    };
+
+    return fetch(url, requestOptions)
+      .then((response) => response.json())
+      .then((json) => {
+        const locationData = json.result.find(
+          (item) => item.variable === "location"
+        );
+        if (locationData && locationData.value) {
+          const coordinates = locationData.value
+            .split(",")
+            .map((coord) => parseFloat(coord.trim()));
+          const [latitude, longitude] = coordinates;
+
+          const speedData = json.result.find(
+            (item) => item.variable === "speed"
+          );
+          const speed = speedData
+            ? speedData.value
+            : "Train 2 is currently not moving.";
+
+          console.log("Latitude of Node 2:", latitude);
+          console.log("Longitude of Node 2:", longitude);
+          console.log("Speed of Node 2:", speed);
+          return { latitude, longitude, speed };
+        }
+        return null;
+      })
+      .catch((error) => {
+        console.error("Node 1 has a " + error);
+      });
+  };
   // Function to calculate ETA for a given station
   const calculateETA = (train, stationLatitude, stationLongitude) => {
     if (train.speed !== 0) {

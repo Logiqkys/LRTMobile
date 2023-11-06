@@ -24,6 +24,7 @@ const TrainPage = ({ navigation }) => {
   const mapRef = useRef(null); // Create a ref for the MapView
   const [showSchedules, setShowSchedules] = useState(false);
   const [trainDirection, setTrainDirection] = useState({});
+  const [prevTrainLongitudes, setPrevTrainLongitudes] = useState({});
 
   const updateTrainData = () => {
     Promise.all([
@@ -37,14 +38,16 @@ const TrainPage = ({ navigation }) => {
     ])
       .then((responses) => {
         const updatedTrainData = responses.map((response, index) => {
-          const prevTrainData = trainData[index] || {}; // Get previous train data
           const { latitude, longitude } = response;
           const speed = response.speed;
-
+          const prevLongitude = prevTrainLongitudes[index];
+          console.log(index);
           // Determine the train direction
           const direction = getTrainDirection(
-            prevTrainData.longitude,
-            longitude
+            index,
+            prevLongitude,
+            longitude,
+            stationCoordinates[index].longitude
           );
           console.log("Direction of Train: ", direction);
 
@@ -53,7 +56,11 @@ const TrainPage = ({ navigation }) => {
             ...prevDirection,
             [index]: direction,
           }));
-
+          // Update the previous longitude for the train
+          setPrevTrainLongitudes((prevLongitudes) => ({
+            ...prevLongitudes,
+            [index]: longitude,
+          }));
           return {
             id: index + 1, // Assign a unique id based on the index
             latitude: response.latitude,
@@ -76,10 +83,17 @@ const TrainPage = ({ navigation }) => {
     return () => clearInterval(interval);
   }, []);
 
-  const getTrainDirection = (prevLng, currentLng, stationLongitude) => {
+  const getTrainDirection = (
+    trainId,
+    prevLng,
+    currentLng,
+    stationLongitude
+  ) => {
     if (prevLng === undefined) {
-      return "No significant movement";
+      return "Previous Longitude is undefined";
     }
+
+    console.log("TESTTSTSTSTS", currentLng);
 
     if (currentLng > prevLng) {
       if (currentLng < stationLongitude) {
@@ -182,11 +196,11 @@ const TrainPage = ({ navigation }) => {
           );
           const speed = speedData
             ? speedData.value
-            : "Train 1 is currently not moving.";
+            : "Train 2 is currently not moving.";
 
-          console.log("Latitude of Node 1:", latitude);
-          console.log("Longitude of Node 1:", longitude);
-          console.log("Speed of Node 1:", speed);
+          console.log("Latitude of Node 2:", latitude);
+          console.log("Longitude of Node 2:", longitude);
+          console.log("Speed of Node 2:", speed);
           return { latitude, longitude, speed };
         }
         return null;
@@ -454,73 +468,63 @@ const TrainPage = ({ navigation }) => {
     console.log("Updated ETA:", etaText); // Log the updated ETA text
   };
 
-  const getEtaTextForStation = (
-    station,
-    stationCoordinates,
-    trainDirection
-  ) => {
+  const getEtaTextForStation = (station, stationCoordinates) => {
     if (trainData.length > 0) {
       const etaTexts = trainData.map((train) => {
-        const stationObject = stationCoordinates.find(
-          (coord) => coord.name === station
-        );
+        // const trainCoordinates = { lat: train.latitude, lng: train.longitude };
+        const stationObject = stationCoordinates.find((coord) => coord.name === station);
+
         if (!stationObject) {
           return `No station is currently being selected`;
         }
 
-        if (trainDirection[train.id - 1] === "Approaching") {
-          const distance = haversineDistance(
-            train.latitude,
-            stationObject.latitude,
-            train.longitude,
-            stationObject.longitude
-          );
+        // const stationCoords = { lat: stationObject.latitude, lng: stationObject.longitude };
 
-          if (train.speed !== 0) {
-            const etaInMinutes = (
-              distance /
-              ((train.speed * 1000) / 3600)
-            ).toFixed(2);
+        const distance = haversineDistanceFormula(train.latitude, stationObject.latitude, train.longitude, stationObject.longitude);
+        if (train.speed !== 0) {
+          const etaInMinutes = ((distance / ((train.speed * 3600) / 1000)) * 60).toFixed(2); // ETA in minutes
+          let etaText;
+          if (etaInMinutes < 1) { //Less than 1 minute (Seconds)
+            const etaInSeconds = (etaInMinutes * 60).toFixed(0); // ETA in seconds
+            const remainingSeconds = etaInSeconds % 60; // Remaining seconds
+            etaText = `Train ${train.id} - ETA to ${station}:   ${remainingSeconds} seconds`;
 
-            if (etaInMinutes < 1) {
-              const etaInSeconds = Math.round(etaInMinutes * 60);
-              return `Train ${train.id} - ETA to ${station}: ${etaInSeconds} seconds`;
-            } else if (etaInMinutes >= 60) {
-              const etaInHours = Math.floor(etaInMinutes / 60);
-              const remainingMinutes = Math.round(etaInMinutes % 60);
-              return `Train ${train.id} - ETA to ${station}: ${etaInHours} hours and ${remainingMinutes} minutes`;
-            } else {
-              const etaMinutes = Math.round(etaInMinutes);
-              return `Train ${train.id} - ETA to ${station}: ${etaMinutes} minutes`;
-            }
+          } else if (etaInMinutes >= 60) {
+            const etaInHours = Math.floor(etaInMinutes / 60); // ETA in hours
+            const remainingMinutes = (etaInMinutes % 60).toFixed(0); // Remaining minutes
+            etaText = `Train ${train.id} - ETA to ${station}: ${etaInHours} hour and ${remainingMinutes} minutes`;
           } else {
-            return `Train ${train.id} - ETA to ${station}: Train stopped.`;
+            const etaMinutes = Math.floor(etaInMinutes);
+            const etaInSeconds = (etaInMinutes * 60).toFixed(0); // ETA in seconds
+            const remainingSeconds = etaInSeconds % 60; // Remaining seconds
+            etaText = `Train ${train.id} - ETA to ${station}: ${etaMinutes} minutes and ${remainingSeconds} seconds`;
           }
+          return etaText;
+        } else {
+          return `Train ${train.id} - ETA to ${station}: Train stopped.`; // Train not Moving
         }
-
-        return null;
       });
-      return etaTexts.join("\n");
+      return etaTexts.join('\n');
     } else {
-      return "No train data available.";
+      return 'No train data available.';
     }
   };
 
+
   const haversineDistanceFormula = (lat1, lat2, lon1, lon2) => {
+
     // The math module contains a function
     // named toRadians which converts from
     // degrees to radians.
-    lon1 = (lon1 * Math.PI) / 180;
-    lon2 = (lon2 * Math.PI) / 180;
-    lat1 = (lat1 * Math.PI) / 180;
-    lat2 = (lat2 * Math.PI) / 180;
+    lon1 = lon1 * Math.PI / 180;
+    lon2 = lon2 * Math.PI / 180;
+    lat1 = lat1 * Math.PI / 180;
+    lat2 = lat2 * Math.PI / 180;
 
     // Haversine formula
     let dlon = lon2 - lon1;
     let dlat = lat2 - lat1;
-    let a =
-      Math.pow(Math.sin(dlat / 2), 2) +
-      Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dlon / 2), 2);
+    let a = Math.pow(Math.sin(dlat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dlon / 2), 2);
     let c = 2 * Math.asin(Math.sqrt(a));
 
     // Radius of earth in kilometers. Use 3956
@@ -528,8 +532,8 @@ const TrainPage = ({ navigation }) => {
     let r = 6371;
 
     // calculate the result
-    return c * r;
-  };
+    return (c * r);
+  }
 
   const haversineDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the Earth in kilometers
@@ -583,8 +587,8 @@ const TrainPage = ({ navigation }) => {
                 latitude: train.latitude,
                 longitude: train.longitude,
               }}
-              title={`Train ${train.id} at ${train.latitude} ${train.longitude}`}
-              description={`Speed: ${(train.speed * 3.6).toFixed(2)} km/h`}
+              title={`Train ${train.id}`}
+              // description={`Speed: ${(train.speed * 3.6).toFixed(2)} km/h`}
               pinColor={
                 trainDirection[index] === "Eastbound"
                   ? "blue"
@@ -655,7 +659,7 @@ const TrainPage = ({ navigation }) => {
         <View
           style={{
             position: "absolute",
-            top: "8%",
+            top: "10.5%",
             right: 10,
             padding: 10,
             backgroundColor: "#9370DB",
@@ -681,7 +685,7 @@ const TrainPage = ({ navigation }) => {
 
       {showSchedules && <SchedulesPage selectedStation={selectedStation} />}
 
-      {trainData.length > 0 && (
+      {/* {trainData.length > 0 && (
         <View
           style={{
             position: "absolute",
@@ -709,9 +713,9 @@ const TrainPage = ({ navigation }) => {
             {trainData[0].speed} m/s
           </Text>
         </View>
-      )}
+      )} */}
 
-      {trainData.length > 0 && (
+      {/* {trainData.length > 0 && (
         <View
           style={{
             position: "absolute",
@@ -739,7 +743,7 @@ const TrainPage = ({ navigation }) => {
             {trainData[1].speed} m/s
           </Text>
         </View>
-      )}
+      )} */}
       <View
         style={{
           flexDirection: "column",
